@@ -14,6 +14,8 @@
 import inspect
 import multiprocessing
 import os
+import math
+import random
 from abc import ABC
 from copy import deepcopy
 from functools import partial
@@ -285,7 +287,8 @@ class TrainerDataLoadingMixin(ABC):
                     f'to the number of the training batches ({self.num_training_batches}). '
                     'If you want to disable validation set `limit_val_batches` to 0.0 instead.'
                 )
-        else:
+            self.val_check_predicate = lambda batch_idx : (batch_idx + 1) % self.val_check_batch == 0
+        elif isinstance(self.val_check_interval, float):
             if not has_len(self.train_dataloader):
                 if self.val_check_interval == 1.0:
                     self.val_check_batch = float('inf')
@@ -298,6 +301,18 @@ class TrainerDataLoadingMixin(ABC):
             else:
                 self.val_check_batch = int(self.num_training_batches * self.val_check_interval)
                 self.val_check_batch = max(1, self.val_check_batch)
+                self.val_check_predicate = lambda batch_idx: (batch_idx + 1) % self.val_check_batch == 0
+        else:
+            assert isinstance(self.val_check_interval, tuple)
+            rate, p = self.val_check_interval
+            assert p > 1
+            self.val_check_batch = 1
+            if rate == 'root':
+                self.val_check_predicate = lambda batch_idx: 1./(p * (batch_idx+1)**((p-1.)/p)) > random.uniform(0,1)
+            elif rate == 'log':
+                self.val_check_predicate = lambda batch_idx: 1./((batch_idx+1)*math.log(p, math.e)) > random.uniform(0,1)
+            else:
+                raise Exception(f"Unknown rate {rate}")
 
     def _reset_eval_dataloader(
         self,

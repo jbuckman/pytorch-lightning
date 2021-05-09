@@ -511,7 +511,7 @@ class TrainLoop:
             # -----------------------------------------
             # VALIDATE IF NEEDED
             # -----------------------------------------
-            should_check_val = self._should_check_val_fx(batch_idx, is_last_batch)
+            should_check_val = self._should_check_val_fx(self.trainer.global_step, is_last_batch)
             if should_check_val:
                 self.trainer.validating = True
                 self.trainer.run_evaluation()
@@ -560,7 +560,7 @@ class TrainLoop:
         # log epoch metrics
         self.trainer.logger_connector.log_train_epoch_end_metrics(epoch_output)
 
-        should_check_val = self._should_check_val_fx(batch_idx, is_last_batch, on_epoch=True)
+        should_check_val = self._should_check_val_fx(self.trainer.global_step, is_last_batch, on_epoch=True)
         should_skip_eval = self.trainer.evaluation_loop.should_skip_evaluation(self.trainer.num_val_batches)
         should_train_only = self.trainer.disable_validation or should_skip_eval
 
@@ -903,34 +903,37 @@ class TrainLoop:
         is_final_batch = self._num_training_batches_reached()
         return not (accumulation_done or is_final_batch)
 
-    def _should_check_val_fx(self, batch_idx: int, is_last_batch: bool, on_epoch: bool = False) -> bool:
+    def _should_check_val_fx(self, global_batch_idx: int, is_last_batch: bool, on_epoch: bool = False) -> bool:
         """ Decide if we should run validation. """
 
         if not self.trainer.enable_validation:
             return False
 
-        # check if this epoch is eligible to run validation
-        if (self.trainer.current_epoch + 1) % self.trainer.check_val_every_n_epoch != 0:
-            return False
+        # # check if this epoch is eligible to run validation
+        # if (self.trainer.current_epoch + 1) % self.trainer.check_val_every_n_epoch != 0:
+        #     return False
 
         # val_check_batch is inf for iterable datasets with no length defined
         # TODO: let training/eval loop handle logic around limit_*_batches and val_check_batch
         is_val_check_batch = False
         if isinstance(self.trainer.limit_train_batches, int) and self.trainer.val_check_batch == float('inf'):
-            is_val_check_batch = (batch_idx + 1) % self.trainer.limit_train_batches == 0
+            is_val_check_batch = (global_batch_idx + 1) % self.trainer.limit_train_batches == 0
         elif self.trainer.val_check_batch != float('inf'):
-            is_val_check_batch = (batch_idx + 1) % self.trainer.val_check_batch == 0
+            # is_val_check_batch = (batch_idx + 1) % self.trainer.val_check_batch == 0
+            is_val_check_batch = self.trainer.val_check_predicate(global_batch_idx)
 
         # Note: num_training_batches is also inf for iterable datasets with no length defined
-        epoch_end_val_check = (batch_idx + 1) % self.trainer.num_training_batches == 0
+        # epoch_end_val_check = (batch_idx + 1) % self.trainer.num_training_batches == 0
         is_last_batch_for_infinite_dataset = is_last_batch and self.trainer.val_check_batch == float("inf")
 
-        if on_epoch:
-            return (
-                is_val_check_batch and epoch_end_val_check
-            ) or self.trainer.should_stop or is_last_batch_for_infinite_dataset
-        else:
-            return is_val_check_batch and not epoch_end_val_check
+        return is_val_check_batch or self.trainer.should_stop or is_last_batch_for_infinite_dataset
+
+        # if on_epoch:
+        #     return (
+        #         is_val_check_batch and epoch_end_val_check
+        #     ) or self.trainer.should_stop or is_last_batch_for_infinite_dataset
+        # else:
+        #     return is_val_check_batch and not epoch_end_val_check
 
     def build_train_args(self, batch, batch_idx, opt_idx, hiddens):
         # enable not needing to add opt_idx to training_step

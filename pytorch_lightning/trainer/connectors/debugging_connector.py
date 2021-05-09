@@ -87,7 +87,9 @@ class DebuggingConnector:
 
 
 def _determine_batch_limits(batches: Union[int, float], name: str) -> Union[int, float]:
-    if 0 <= batches <= 1:
+    if isinstance(batches, tuple):
+        return batches
+    elif 0 <= batches <= 1:
         return batches
     elif batches > 1 and batches % 1.0 == 0:
         return int(batches)
