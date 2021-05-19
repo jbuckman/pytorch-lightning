@@ -308,9 +308,9 @@ class TrainerDataLoadingMixin(ABC):
             assert p > 1
             self.val_check_batch = 1
             if rate == 'root':
-                self.val_check_predicate = lambda batch_idx: 1./(p * (batch_idx+1)**((p-1.)/p)) > random.uniform(0,1)
+                self.val_check_predicate = lambda batch_idx: math.floor((batch_idx+1)**(1/p)) < math.floor((batch_idx+2)**(1/p))
             elif rate == 'log':
-                self.val_check_predicate = lambda batch_idx: 1./((batch_idx+1)*math.log(p, math.e)) > random.uniform(0,1)
+                self.val_check_predicate = lambda batch_idx: math.floor(math.log(batch_idx+1, p)) < math.floor(math.log(batch_idx+2, p))
             else:
                 raise Exception(f"Unknown rate {rate}")
 
