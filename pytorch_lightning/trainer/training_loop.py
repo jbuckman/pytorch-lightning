@@ -571,7 +571,7 @@ class TrainLoop:
         if should_train_only:
             self.check_checkpoint_callback(True)
 
-        if should_check_val:
+        if False: # should_check_val:
             self.trainer.validating = True
             self.trainer.run_evaluation(on_epoch=True)
             self.trainer.training = True
